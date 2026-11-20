@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "rootDir": "src",
+    "outDir": ".angular/tests",
+    "types": []
+  },
+  "include": ["src/app/**/*.ts"]
+}
