@@ -7,7 +7,8 @@
     "start": "ng serve --host 127.0.0.1",
     "build": "ng build",
     "build:dev": "ng build --configuration development",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs",
+    "verify": "npm test && npm run build && node scripts/check-build.mjs"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0",

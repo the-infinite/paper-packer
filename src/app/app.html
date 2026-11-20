@@ -137,6 +137,8 @@
           (retryRequested)="search.retryYearChart()" />
       } @placeholder {
         <div class="chart-placeholder"><h3>Research over time</h3><p>Search for a topic to see its timeline.</p></div>
+      } @error {
+        <div class="chart-placeholder" role="status"><h3>Timeline unavailable</h3><p>Reload this page to load the research timeline.</p></div>
       }
     </aside>
     </div>

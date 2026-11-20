@@ -56,7 +56,7 @@
             @for (row of rows(); track row.label) {
               <li class="chart-row">
                 <span class="year">{{ row.label }}</span>
-                <span class="bar-track" aria-hidden="true"><span class="bar" [class.missing]="row.missing" [style.width.%]="row.width"></span></span>
+                <span class="bar-track" aria-hidden="true"><span class="bar" [class.missing]="row.kind === 'missing'" [class.unaccounted]="row.kind === 'unaccounted'" [style.width.%]="row.width"></span></span>
                 <span class="count">{{ row.count | number }}</span>
               </li>
             }
@@ -82,7 +82,7 @@
           }
         </tbody>
         <tfoot>
-          <tr><th scope="row">Accounted for</th><td class="number">{{ data.accountedCount | number }}</td></tr>
+          <tr><th scope="row">Covered by year buckets</th><td class="number">{{ data.accountedCount | number }}</td></tr>
           @if (data.expectedTotal !== null) {
             <tr><th scope="row">Query matches</th><td class="number">{{ data.expectedTotal | number }}</td></tr>
           }

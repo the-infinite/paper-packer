@@ -24,14 +24,17 @@ export interface YearChartRow {
   readonly label: string;
   readonly count: number;
   readonly width: number;
-  readonly missing: boolean;
+  readonly kind: 'year' | 'missing' | 'unaccounted';
 }
 
 export function yearChartRows(distribution: YearDistribution): readonly YearChartRow[] {
-  const rows = distribution.years.map((bucket) => ({
-    label: String(bucket.year), count: bucket.count, missing: false,
+  const rows: Omit<YearChartRow, 'width'>[] = distribution.years.map((bucket) => ({
+    label: String(bucket.year), count: bucket.count, kind: 'year',
   }));
-  if (distribution.missingYear > 0) rows.push({ label: 'Missing/invalid year', count: distribution.missingYear, missing: true });
+  if (distribution.missingYear > 0) rows.push({ label: 'Missing/invalid year', count: distribution.missingYear, kind: 'missing' });
+  if (distribution.issue === 'under-count' && distribution.unaccountedCount !== null && distribution.unaccountedCount > 0) {
+    rows.push({ label: 'Not covered by year buckets', count: distribution.unaccountedCount, kind: 'unaccounted' });
+  }
   const largest = rows.reduce((max, row) => Math.max(max, row.count), 0);
   return rows.map((row) => ({ ...row, width: largest ? (row.count / largest) * 100 : 0 }));
 }

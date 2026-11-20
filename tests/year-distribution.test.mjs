@@ -75,9 +75,9 @@ test('ignores zero-height years and keeps latest years first', () => {
 test('chart rows use the same exact counts as the data table and scale against the largest bucket', () => {
   const data = reconcileYearCoverage(normalizeYearAggregation(response({ '2024': 40, '2020': 20, null: 10 })), 70);
   assert.deepEqual(yearChartRows(data), [
-    { label: '2024', count: 40, width: 100, missing: false },
-    { label: '2020', count: 20, width: 50, missing: false },
-    { label: 'Missing/invalid year', count: 10, width: 25, missing: true },
+    { label: '2024', count: 40, width: 100, kind: 'year' },
+    { label: '2020', count: 20, width: 50, kind: 'year' },
+    { label: 'Missing/invalid year', count: 10, width: 25, kind: 'missing' },
   ]);
 });
 
@@ -86,6 +86,24 @@ test('empty and all-unknown distributions never produce invalid bar widths', () 
   assert.deepEqual(yearChartRows(empty), []);
   const unknown = reconcileYearCoverage(normalizeYearAggregation(response({ null: 10 })), 10);
   assert.equal(yearChartRows(unknown)[0].width, 100);
+});
+
+test('an explicit unaccounted row represents the query gap without inventing missing years or complete coverage', () => {
+  const data = reconcileYearCoverage(normalizeYearAggregation(response({ '2024': 40, null: 10 })), 100);
+  const rows = yearChartRows(data);
+  assert.deepEqual(rows.at(-1), { label: 'Not covered by year buckets', count: 50, width: 100, kind: 'unaccounted' });
+  assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 100);
+  assert.equal(data.missingYear, 10);
+  assert.equal(data.accountedCount, 50);
+  assert.equal(data.complete, false);
+});
+
+test('does not invent a remainder when totals are unknown, exceeded, or inconsistent', () => {
+  const raw = normalizeYearAggregation(response({ '2024': 10 }));
+  for (const data of [reconcileYearCoverage(raw, null), reconcileYearCoverage(raw, 5),
+    reconcileYearCoverage(normalizeYearAggregation(response({ '2024': 10 }, { totalHits: 20 })), 30)]) {
+    assert.equal(yearChartRows(data).some((row) => row.kind === 'unaccounted'), false);
+  }
 });
 
 test('aggregates client-side only when unique returned papers cover the entire query', () => {
