@@ -1,3 +1,5 @@
+import { Parser } from 'htmlparser2';
+
 export interface Paper {
   readonly id: string | null;
   readonly title: string;
@@ -26,6 +28,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+const hiddenTags = new Set(['script', 'style', 'template']);
+const blockTags = new Set(['p', 'div', 'br', 'li', 'ul', 'ol', 'blockquote', 'section', 'h1', 'h2', 'h3']);
+const encodedMarkup = /(?:<|&lt;)\/?(?:p|div|br|span|em|strong|b|i|sup|sub|ul|ol|li|script|style|template)\b/i;
+
+function markupText(value: string): string {
+  const parts: string[] = [];
+  let hiddenDepth = 0;
+  const parser = new Parser({
+    onopentag(name) {
+      if (hiddenTags.has(name)) hiddenDepth++;
+      else if (!hiddenDepth && blockTags.has(name)) parts.push('\n');
+    },
+    ontext(content) {
+      if (!hiddenDepth) parts.push(content);
+    },
+    onclosetag(name) {
+      if (hiddenTags.has(name)) hiddenDepth = Math.max(0, hiddenDepth - 1);
+      else if (!hiddenDepth && blockTags.has(name)) parts.push('\n');
+    },
+  }, { decodeEntities: true });
+  parser.end(value);
+  return parts.join('');
+}
+
+function abstractText(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  // Parse text in memory, never in a browser document: provider markup cannot
+  // execute scripts or load resources. Some CORE sources encode the markup too.
+  let result = markupText(raw);
+  for (let pass = 0; pass < 2 && encodedMarkup.test(result); pass++) result = markupText(result);
+  return result.replace(/[\t \u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim() || null;
 }
 
 export function safeExternalUrl(value: unknown): string | null {
@@ -73,7 +109,7 @@ function normalizePaper(value: unknown): Paper {
     id,
     title: text(value['title']) ?? 'Untitled paper',
     authors: [...new Set(authors)],
-    abstract: text(value['abstract']),
+    abstract: abstractText(value['abstract']),
     year: publicationYear(value['yearPublished']) ?? dateYear(value['publishedDate']),
     recordUrl: id ? `https://core.ac.uk/works/${id}` : null,
     fullTextUrl,

@@ -73,3 +73,32 @@ test('uses a valid publication date when a separate year is missing, without inv
   ] });
   assert.deepEqual(result.papers.map((paper) => paper.year), [2023, 2022, null, null]);
 });
+
+test('cleans the encoded paragraph markup observed in the live CORE response', () => {
+  const { papers } = normalizeCoreResults({ results: [{
+    abstract: '&lt;p&gt;First release of the research project.&lt;/p&gt',
+  }] });
+  assert.equal(papers[0].abstract, 'First release of the research project.');
+});
+
+test('preserves paragraph separation, entities, and scientific comparison symbols', () => {
+  const { papers } = normalizeCoreResults({ results: [{
+    abstract: '<p>A &amp; B: p &lt; 0.05.</p><p>A &lt; B &gt; C. CO<sub>2</sub>.</p>',
+  }] });
+  assert.equal(papers[0].abstract, 'A & B: p < 0.05.\n\nA < B > C. CO2.');
+});
+
+test('discards script/style/template content and markup without rendering provider HTML', () => {
+  const { papers } = normalizeCoreResults({ results: [{
+    abstract: '<script>alert(1)</script><style>body{display:none}</style><template>Hidden</template><p>Safe <img src="https://example.org/tracker" onerror="alert(1)">research.</p>',
+  }] });
+  assert.equal(papers[0].abstract, 'Safe research.');
+});
+
+test('handles nested entity encoding and abstracts without readable content', () => {
+  const { papers } = normalizeCoreResults({ results: [
+    { abstract: '&amp;lt;p&amp;gt;Research summary.&amp;lt;/p&amp;gt;' },
+    { abstract: '<p> &nbsp; </p>' },
+  ] });
+  assert.deepEqual(papers.map((paper) => paper.abstract), ['Research summary.', null]);
+});
