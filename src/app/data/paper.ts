@@ -1,4 +1,6 @@
 import { Parser } from 'htmlparser2';
+import { InvalidCoreResponseError } from './core-response-error.js';
+export { InvalidCoreResponseError } from './core-response-error.js';
 
 export interface Paper {
   readonly id: string | null;
@@ -13,13 +15,6 @@ export interface Paper {
 export interface PaperResults {
   readonly papers: readonly Paper[];
   readonly totalHits: number | null;
-}
-
-export class InvalidCoreResponseError extends Error {
-  constructor() {
-    super('CORE returned an unexpected response.');
-    this.name = 'InvalidCoreResponseError';
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

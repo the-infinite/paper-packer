@@ -1,10 +1,13 @@
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
-import { catchError, map, Observable, throwError, timeout, TimeoutError } from 'rxjs';
-import { InvalidCoreResponseError, normalizeCoreResults, PaperResults } from './paper.js';
+import { catchError, map, Observable, switchMap, throwError, timeout, TimeoutError } from 'rxjs';
+import { InvalidCoreResponseError } from './core-response-error.js';
+import type { PaperResults } from './paper.js';
 import { DEFAULT_RESULT_LIMIT, validateSearchInput } from './search-query.js';
+import { InvalidYearAggregationError, normalizeYearAggregation, YearAggregation } from './year-distribution.js';
 
 export const CORE_SEARCH_URL = 'https://api.core.ac.uk/v3/search/works/';
+export const CORE_AGGREGATION_URL = 'https://api.core.ac.uk/v3/search/works/aggregate';
 export const CORE_PAGE_SIZE = DEFAULT_RESULT_LIMIT;
 export const CORE_TIMEOUT_MS = new InjectionToken<number>('CORE request timeout', {
   providedIn: 'root', factory: () => 30_000,
@@ -76,9 +79,26 @@ export class CoreApi {
       .set('exclude', 'fullText');
 
     return this.http.get<unknown>(CORE_SEARCH_URL, { params }).pipe(
+      switchMap((value) => import('./paper.js').then(({ normalizeCoreResults }) => normalizeCoreResults(value))),
       timeout({ first: this.timeoutMs }),
-      map(normalizeCoreResults),
       catchError((error: unknown) => throwError(() => searchError(error))),
+    );
+  }
+
+  aggregateYears(query: string): Observable<YearAggregation> {
+    const checked = validateSearchInput(query);
+    if (!checked.request) {
+      return throwError(() => new CoreSearchError('query', checked.queryError, false));
+    }
+    return this.http.post<unknown>(CORE_AGGREGATION_URL, {
+      q: checked.request.query,
+      aggregations: ['yearPublished'],
+    }).pipe(
+      timeout({ first: this.timeoutMs }),
+      map(normalizeYearAggregation),
+      catchError((error: unknown) => throwError(() => error instanceof InvalidYearAggregationError
+        ? new CoreSearchError('response', 'CORE returned unexpected year data. Please try again.')
+        : searchError(error))),
     );
   }
 }

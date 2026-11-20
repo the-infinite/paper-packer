@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { createEnvironmentInjector, runInInjectionContext } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom, NEVER, of, throwError } from 'rxjs';
-import { CoreApi, CORE_PAGE_SIZE, CORE_SEARCH_URL, CORE_TIMEOUT_MS, searchError } from '../.angular/tests/app/data/core-api.js';
+import { CoreApi, CORE_AGGREGATION_URL, CORE_PAGE_SIZE, CORE_SEARCH_URL, CORE_TIMEOUT_MS, searchError } from '../.angular/tests/app/data/core-api.js';
 
 function apiWith(t, http, timeoutMs = 30000) {
   const injector = createEnvironmentInjector([
@@ -97,4 +97,42 @@ test('requests both supported count boundaries and blocks invalid queries/counts
   }
   await assert.rejects(firstValueFrom(api.search('(drone AND', 10)), { kind: 'query', retryable: false });
   assert.deepEqual(requests, ['1', '100']);
+});
+
+test('aggregates publication years across the full unchanged query without a page limit or offset', async (t) => {
+  const query = '(drone AND (package OR delivery))';
+  let request;
+  const api = apiWith(t, { post: (url, body) => {
+    request = { url, body };
+    return of({ aggregations: { yearPublished: { '2024': 1000 } } });
+  } });
+  const result = await firstValueFrom(api.aggregateYears(query));
+  assert.equal(request.url, CORE_AGGREGATION_URL);
+  assert.deepEqual(request.body, { q: query, aggregations: ['yearPublished'] });
+  assert.deepEqual(result.years, [{ year: 2024, count: 1000 }]);
+});
+
+test('blocks invalid aggregation queries and treats malformed counts as response errors', async (t) => {
+  let calls = 0;
+  const api = apiWith(t, { post: () => { calls++; return of({ aggregations: { yearPublished: [] } }); } });
+  await assert.rejects(firstValueFrom(api.aggregateYears('(drone AND')), { kind: 'query', retryable: false });
+  assert.equal(calls, 0);
+  await assert.rejects(firstValueFrom(api.aggregateYears('drone')), { kind: 'response' });
+});
+
+test('times out year aggregations and propagates rate-limit deadlines without automatic retries', async (t) => {
+  const slow = apiWith(t, { post: () => NEVER }, 1);
+  await assert.rejects(firstValueFrom(slow.aggregateYears('drone')), { kind: 'timeout' });
+  let calls = 0;
+  const limited = apiWith(t, { post: () => {
+    calls++;
+    return throwError(() => new HttpErrorResponse({ status: 429, headers: new HttpHeaders({ 'Retry-After': '600' }) }));
+  } });
+  const before = Date.now();
+  await assert.rejects(firstValueFrom(limited.aggregateYears('drone')), (error) => {
+    assert.equal(error.kind, 'rate-limit');
+    assert.ok(error.retryAt >= before + 600000);
+    return true;
+  });
+  assert.equal(calls, 1);
 });
