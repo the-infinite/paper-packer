@@ -33,18 +33,33 @@
       </div>
       <span class="stage-label">Research from CORE</span>
     </div>
-    <form class="search-form" role="search" aria-label="Search research papers" (submit)="submit($event, queryInput.value)">
-      <label for="paper-query">What would you like to explore?</label>
+    <form class="search-form" role="search" aria-label="Search research papers" novalidate (submit)="submit($event)">
       <div class="search-controls">
-        <input #queryInput id="paper-query" name="query" type="search" required maxlength="500"
-          placeholder="Try drone delivery or renewable energy"
-          [attr.aria-describedby]="search.inputError() ? 'query-help query-error' : 'query-help'"
-          [attr.aria-invalid]="search.inputError() ? 'true' : null">
-        <button type="submit" [disabled]="!search.canSearch()">{{ state.status === 'loading' ? 'Searching…' : 'Find papers' }}</button>
+        <div class="query-field">
+          <label for="paper-query">What would you like to explore?</label>
+          <input #queryInput id="paper-query" name="query" type="search" required [maxLength]="maxQueryLength"
+            placeholder="Try (drone AND (package OR delivery))"
+            [value]="query()" (input)="query.set(queryInput.value)"
+            [attr.aria-describedby]="search.inputError() ? 'query-help query-error' : 'query-help'"
+            [attr.aria-invalid]="search.inputError() ? 'true' : null">
+        </div>
+        <div class="limit-field">
+          <label for="paper-limit">Papers to return</label>
+          <input #limitInput id="paper-limit" name="limit" type="number" inputmode="numeric" required
+            [attr.min]="minLimit" [attr.max]="maxLimit" step="1"
+            [value]="resultLimit()" (input)="resultLimit.set(limitInput.value)"
+            [attr.aria-describedby]="search.limitError() ? 'limit-help limit-error' : 'limit-help'"
+            [attr.aria-invalid]="search.limitError() ? 'true' : null">
+        </div>
+        <button type="submit" [disabled]="!canSubmit()">{{ searchingCurrentInput() ? 'Searching…' : 'Find papers' }}</button>
       </div>
-      <p id="query-help" class="query-help">Search CORE with keywords. Each search returns up to {{ resultLimit }} papers.</p>
+      <p id="query-help" class="query-help">Use uppercase AND, OR, and NOT to connect ideas. Group with parentheses or put exact phrases in quotes.</p>
+      <p id="limit-help" class="query-help">Choose {{ minLimit }}–{{ maxLimit }} papers. A new search replaces any search still loading.</p>
       @if (search.inputError()) {
         <p id="query-error" class="input-error" role="alert">{{ search.inputError() }}</p>
+      }
+      @if (search.limitError()) {
+        <p id="limit-error" class="input-error" role="alert">{{ search.limitError() }}</p>
       }
     </form>
     <p class="search-feedback" role="status" aria-live="polite" aria-atomic="true">{{ search.announcement() }}</p>
@@ -85,7 +100,7 @@
             }
           }
           @if (state.error.retryable) {
-            <button type="button" class="retry-button" [disabled]="!search.canRetry()" (click)="search.retry()">Try again</button>
+            <button type="button" class="retry-button" [disabled]="!search.canRetry()" (click)="retry()">Try again</button>
           }
           <a class="guide-link" href="#search-guide">Review the search guide</a>
         </div>
@@ -94,7 +109,11 @@
         @if (state.results.papers.length) {
           <div class="results-heading">
             <h3>Results for <span class="submitted-query">“{{ state.query }}”</span></h3>
-            <p>{{ state.results.papers.length }} {{ state.results.papers.length === 1 ? 'paper' : 'papers' }} returned@if (state.results.totalHits !== null) { · {{ state.results.totalHits | number }} matching papers}</p>
+            <p>{{ state.results.papers.length }} {{ state.results.papers.length === 1 ? 'paper' : 'papers' }} returned (up to {{ state.limit }} requested)@if (state.results.totalHits !== null) { · {{ state.results.totalHits | number }} matching papers}</p>
+            <div class="result-actions">
+              <button type="button" class="link-button" (click)="copyLink()">Copy search link</button>
+              <span class="copy-feedback" role="status">{{ copyMessage() }}</span>
+            </div>
           </div>
           <div class="paper-list">
             @for (paper of state.results.papers; track $index) {
@@ -139,6 +158,7 @@
         <div class="detail-content">
           <p>Group alternatives, then connect them to your main topic.</p>
           <code>(drone AND (package OR delivery))</code>
+          <button type="button" class="example-button" (click)="useExample(queryInput)">Use this example</button>
         </div>
       </details>
     </div>

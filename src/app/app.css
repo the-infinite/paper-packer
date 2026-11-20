@@ -29,8 +29,10 @@ h1 span { font-family: Georgia, "Times New Roman", serif; color: var(--accent); 
 .guide-link:hover { background: #edf5f3; }
 .search-form { padding: 28px 32px 16px; }
 .search-form label { display: block; margin-bottom: 10px; font-size: 1rem; font-weight: 600; }
-.search-controls { display: flex; gap: 12px; }
-.search-controls input { flex: 1; min-width: 0; padding: 14px 16px; border: 1px solid #90aaa0; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
+.search-controls { display: flex; align-items: end; gap: 12px; }
+.query-field { flex: 1; min-width: 0; }
+.limit-field { flex: 0 0 140px; }
+.search-controls input { width: 100%; min-width: 0; padding: 14px 16px; border: 1px solid #90aaa0; border-radius: 7px; color: var(--ink); background: white; font: inherit; }
 .search-controls input::placeholder { color: #63766e; opacity: 1; }
 .search-controls input[aria-invalid="true"] { border-color: #a63838; }
 button { min-height: 48px; padding: 12px 24px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: white; font: inherit; font-weight: 600; cursor: pointer; }
@@ -50,6 +52,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .results-heading h3 { font-size: 1.125rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .submitted-query { color: var(--accent); }
 .results-heading p { color: var(--muted); font-size: 0.875rem; }
+.result-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.link-button, .example-button { min-height: 44px; padding: 8px 12px; border-color: #9cb7ad; background: white; color: var(--accent); font-size: 0.875rem; }
+.link-button:hover:not(:disabled), .example-button:hover:not(:disabled) { background: #e5f2ec; }
+.copy-feedback { color: var(--muted); font-size: 0.875rem; }
+.example-button { display: block; margin-top: 16px; }
 .paper-list app-paper-card + app-paper-card { border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: no-preference) {
   .loading-spinner { animation: turn 1s linear infinite; }
@@ -79,7 +86,8 @@ summary::marker { color: var(--accent); }
   .section-heading { padding: 24px; align-items: flex-start; flex-direction: column; gap: 16px; }
   .stage-label { font-size: 0.75rem; }
   .search-form { padding: 24px 24px 12px; }
-  .search-controls { flex-direction: column; }
+  .search-controls { flex-direction: column; align-items: stretch; }
+  .limit-field { flex-basis: auto; }
   .search-feedback { padding-inline: 24px; }
   .results-heading { padding: 22px 24px; }
   .search-guide { grid-template-columns: 1fr; gap: 32px; padding-block: 48px; }
