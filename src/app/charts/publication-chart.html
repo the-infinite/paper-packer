@@ -1,0 +1,93 @@
+@let chart = state();
+<section class="timeline" aria-labelledby="timeline-title" [attr.aria-busy]="chart.status === 'loading'">
+  <p class="eyebrow">The bigger picture</p>
+  <h3 id="timeline-title">Research over time</h3>
+  <p class="intro">Publication years across your query, independent of the paper cards shown.</p>
+
+  @switch (chart.status) {
+    @case ('idle') {
+      <p class="placeholder">Search for a topic to see its research timeline.</p>
+    }
+    @case ('waiting') {
+      <p class="placeholder">The timeline will appear after a successful paper search.</p>
+    }
+    @case ('loading') {
+      <p class="placeholder" role="status">Loading publication years for the full query…</p>
+    }
+    @case ('error') {
+      <div class="chart-error" role="status">
+        <h4>Timeline unavailable</h4>
+        <p>{{ chart.error.message }}</p>
+        @if (chart.error.retryAt; as retryAt) {
+          @if (!canRetry()) { <p>Try again after {{ retryAt | date:'shortTime' }}.</p> }
+        }
+        @if (chart.error.retryable) {
+          <button type="button" [disabled]="!canRetry()" (click)="retryRequested.emit()">Retry timeline</button>
+        }
+      </div>
+    }
+  }
+
+  @if (chart.status === 'ready' || chart.status === 'incomplete') {
+    @let data = chart.distribution;
+    <p class="chart-query">“{{ chart.query }}”</p>
+    <span class="coverage" [class.partial]="!data.complete">{{ data.complete ? 'Complete query' : 'Incomplete coverage' }}</span>
+    <p class="coverage-summary">
+      {{ data.accountedCount | number }} papers accounted for@if (data.expectedTotal !== null) { of {{ data.expectedTotal | number }} matches}.
+    </p>
+    @if (!data.complete) {
+      <div class="coverage-warning" role="status">
+        @switch (data.issue) {
+          @case ('unknown-total') { <p>CORE did not provide a matching total. Full coverage cannot be verified.</p> }
+          @case ('under-count') { <p>{{ data.unaccountedCount | number }} matches are not accounted for by these buckets. The chart is incomplete.</p> }
+          @case ('over-count') { <p>Year counts exceed the matching total. Full coverage cannot be verified.</p> }
+          @case ('changed-total') { <p>CORE reported different totals while loading. Search again to verify coverage.</p> }
+        }
+        <p>Unaccounted matches are not assumed to have missing years.</p>
+        <button type="button" [disabled]="!canRetry()" (click)="retryRequested.emit()">Refresh year data</button>
+      </div>
+    }
+
+    @if (rows().length) {
+      <figure>
+        <figcaption>Paper counts by year · latest first</figcaption>
+        <div class="plot" tabindex="0" role="region" aria-label="Publication year counts, latest first. Scroll for earlier years.">
+          <ol>
+            @for (row of rows(); track row.label) {
+              <li class="chart-row">
+                <span class="year">{{ row.label }}</span>
+                <span class="bar-track" aria-hidden="true"><span class="bar" [class.missing]="row.missing" [style.width.%]="row.width"></span></span>
+                <span class="count">{{ row.count | number }}</span>
+              </li>
+            }
+          </ol>
+        </div>
+        <p class="scale-note">Bars are scaled to the largest bucket. Scroll for earlier years.</p>
+      </figure>
+    } @else {
+      <p class="placeholder">{{ data.complete && data.expectedTotal === 0 ? 'No matching papers to chart.' : 'No publication-year buckets were returned.' }}</p>
+    }
+
+    @if (data.missingYear > 0) {
+      <p class="metadata-note">{{ data.missingYear | number }} papers have an explicitly missing or invalid publication year.</p>
+    }
+    <details>
+      <summary>View year data</summary>
+      <table>
+        <caption>Publication-year counts for this query</caption>
+        <thead><tr><th scope="col">Publication year</th><th scope="col" class="number">Papers</th></tr></thead>
+        <tbody>
+          @for (row of rows(); track row.label) {
+            <tr><th scope="row">{{ row.label }}</th><td class="number">{{ row.count | number }}</td></tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr><th scope="row">Accounted for</th><td class="number">{{ data.accountedCount | number }}</td></tr>
+          @if (data.expectedTotal !== null) {
+            <tr><th scope="row">Query matches</th><td class="number">{{ data.expectedTotal | number }}</td></tr>
+          }
+        </tfoot>
+      </table>
+    </details>
+  }
+</section>

@@ -7,11 +7,12 @@ import {
   MIN_RESULT_LIMIT, validateSearchInput,
 } from './data/search-query.js';
 import { readSearchLocation, writeSearchLocation } from './data/search-location.js';
+import { PublicationChart } from './charts/publication-chart.js';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, PaperCard],
+  imports: [DatePipe, DecimalPipe, PaperCard, PublicationChart],
   providers: [PaperSearch],
   templateUrl: './app.html',
   styleUrl: './app.css',

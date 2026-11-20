@@ -64,7 +64,8 @@
     </form>
     <p class="search-feedback" role="status" aria-live="polite" aria-atomic="true">{{ search.announcement() }}</p>
 
-    <div class="results-region" [attr.aria-busy]="state.status === 'loading'">
+    <div class="results-layout">
+    <div id="paper-results" class="results-region" [attr.aria-busy]="state.status === 'loading'">
     @switch (state.status) {
       @case ('idle') {
         <div class="workspace-body">
@@ -129,6 +130,15 @@
         }
       }
     }
+    </div>
+    <aside class="chart-panel" aria-label="Publication-year analysis">
+      @defer (on idle) {
+        <app-publication-chart [state]="search.yearChart()" [canRetry]="search.canRetryYearChart()"
+          (retryRequested)="search.retryYearChart()" />
+      } @placeholder {
+        <div class="chart-placeholder"><h3>Research over time</h3><p>Search for a topic to see its timeline.</p></div>
+      }
+    </aside>
     </div>
   </section>
 
