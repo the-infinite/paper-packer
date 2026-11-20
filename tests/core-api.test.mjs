@@ -70,3 +70,31 @@ test('honors Retry-After seconds and CORE retry-date headers, with a fallback co
   const fallback = searchError(new HttpErrorResponse({ status: 429 }));
   assert.ok(fallback.retryAt >= before + 60000);
 });
+
+test('preserves nested Boolean syntax and quoted text while sending the selected count', async (t) => {
+  const query = '(drone AND (package OR delivery)) AND "health & safety"';
+  let sent;
+  const api = apiWith(t, { get: (url, options) => {
+    sent = new URL(url);
+    sent.search = options.params.toString();
+    return of({ totalHits: 0, results: [] });
+  } });
+  await firstValueFrom(api.search(query, 25));
+  assert.equal(sent.searchParams.get('q'), query);
+  assert.equal(sent.searchParams.get('limit'), '25');
+});
+
+test('requests both supported count boundaries and blocks invalid queries/counts locally', async (t) => {
+  const requests = [];
+  const api = apiWith(t, { get: (_url, options) => {
+    requests.push(options.params.get('limit'));
+    return of({ totalHits: 0, results: [] });
+  } });
+  await firstValueFrom(api.search('drone', 1));
+  await firstValueFrom(api.search('drone', 100));
+  for (const count of [0, 101, 1.5, NaN, Infinity]) {
+    await assert.rejects(firstValueFrom(api.search('drone', count)), { kind: 'query', retryable: false });
+  }
+  await assert.rejects(firstValueFrom(api.search('(drone AND', 10)), { kind: 'query', retryable: false });
+  assert.deepEqual(requests, ['1', '100']);
+});

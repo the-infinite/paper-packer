@@ -2,9 +2,10 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { catchError, map, Observable, throwError, timeout, TimeoutError } from 'rxjs';
 import { InvalidCoreResponseError, normalizeCoreResults, PaperResults } from './paper.js';
+import { DEFAULT_RESULT_LIMIT, validateSearchInput } from './search-query.js';
 
 export const CORE_SEARCH_URL = 'https://api.core.ac.uk/v3/search/works/';
-export const CORE_PAGE_SIZE = 10;
+export const CORE_PAGE_SIZE = DEFAULT_RESULT_LIMIT;
 export const CORE_TIMEOUT_MS = new InjectionToken<number>('CORE request timeout', {
   providedIn: 'root', factory: () => 30_000,
 });
@@ -64,12 +65,14 @@ export class CoreApi {
   private readonly http = inject(HttpClient);
   private readonly timeoutMs = inject(CORE_TIMEOUT_MS);
 
-  search(query: string): Observable<PaperResults> {
-    const trimmed = query.trim();
-    if (!trimmed) return throwError(() => new CoreSearchError('query', 'Enter a topic to search for.', false));
+  search(query: string, limit = DEFAULT_RESULT_LIMIT): Observable<PaperResults> {
+    const checked = validateSearchInput(query, limit);
+    if (!checked.request) {
+      return throwError(() => new CoreSearchError('query', checked.queryError || checked.limitError, false));
+    }
     const params = new HttpParams()
-      .set('q', trimmed)
-      .set('limit', CORE_PAGE_SIZE)
+      .set('q', checked.request.query)
+      .set('limit', checked.request.limit)
       .set('exclude', 'fullText');
 
     return this.http.get<unknown>(CORE_SEARCH_URL, { params }).pipe(

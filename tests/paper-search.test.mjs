@@ -9,9 +9,9 @@ import { PaperSearch } from '../.angular/tests/app/data/paper-search.js';
 function setup(t) {
   const requests = [];
   const injector = createEnvironmentInjector([{ provide: CoreApi, useValue: {
-    search: (query) => {
+    search: (query, limit) => {
       const response = new Subject();
-      requests.push({ query, response });
+      requests.push({ query, limit, response });
       return response;
     },
   } }], null);
@@ -31,12 +31,12 @@ test('does not fetch on construction or for whitespace-only input', (t) => {
 test('captures the submitted query and distinguishes loaded papers from matching totals', (t) => {
   const { search, requests } = setup(t);
   search.submit('  drones  ');
-  assert.deepEqual(search.state(), { status: 'loading', query: 'drones' });
-  assert.equal(search.canSearch(), false);
+  assert.deepEqual(search.state(), { status: 'loading', query: 'drones', limit: 10 });
+  assert.equal(search.canSearch(), true);
   const results = { papers: [{ title: 'Paper' }], totalHits: 1000 };
   requests[0].response.next(results);
   requests[0].response.complete();
-  assert.deepEqual(search.state(), { status: 'success', query: 'drones', results });
+  assert.deepEqual(search.state(), { status: 'success', query: 'drones', limit: 10, results });
   assert.match(search.announcement(), /1 paper loaded/);
   assert.equal(search.canSearch(), true);
 });
@@ -44,7 +44,7 @@ test('captures the submitted query and distinguishes loaded papers from matching
 test('does not issue duplicate requests while a search is in progress', (t) => {
   const { search, requests } = setup(t);
   search.submit('first topic');
-  search.submit('second topic');
+  search.submit('first topic');
   assert.equal(requests.length, 1);
   assert.equal(search.state().query, 'first topic');
 });
@@ -106,4 +106,63 @@ test('destroying the owner cancels the request and prevents late updates', () =>
   assert.equal(response.observed, false);
   response.next({ papers: [], totalHits: 0 });
   assert.equal(search.state().status, 'loading');
+});
+
+test('changing the query cancels the previous request and ignores late results/errors', (t) => {
+  const { search, requests } = setup(t);
+  search.submit('first topic', 10);
+  assert.equal(requests[0].response.observed, true);
+  search.submit('second topic', 25);
+  assert.equal(requests[0].response.observed, false);
+  requests[0].response.next({ papers: [{ title: 'Stale result' }], totalHits: 1 });
+  requests[0].response.error(new CoreSearchError('network', 'Old failure'));
+  assert.deepEqual(search.state(), { status: 'loading', query: 'second topic', limit: 25 });
+  const results = { papers: [{ title: 'Current result' }], totalHits: 100 };
+  requests[1].response.next(results);
+  assert.deepEqual(search.state(), { status: 'success', query: 'second topic', limit: 25, results });
+});
+
+test('changing only the count replaces the pending request; repeating both does not', (t) => {
+  const { search, requests } = setup(t);
+  assert.equal(search.submit('drone', 10), true);
+  assert.equal(search.submit('drone', '10'), false);
+  assert.equal(search.submit('drone', '25'), true);
+  assert.equal(requests[0].response.observed, false);
+  assert.deepEqual(requests.map(({ query, limit }) => ({ query, limit })), [
+    { query: 'drone', limit: 10 }, { query: 'drone', limit: 25 },
+  ]);
+});
+
+test('invalid replacement input reports both errors without canceling the valid search', (t) => {
+  const { search, requests } = setup(t);
+  search.submit('drone', 10);
+  assert.equal(search.submit('(drone AND', 0), false);
+  assert.ok(search.inputError());
+  assert.ok(search.limitError());
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].response.observed, true);
+  search.submit('delivery', 25);
+  assert.equal(search.inputError(), '');
+  assert.equal(search.limitError(), '');
+});
+
+test('retry preserves the failed query and count, including the maximum count', (t) => {
+  const { search, requests } = setup(t);
+  search.submit('(drone AND (package OR delivery))', 100);
+  requests[0].response.error(new CoreSearchError('network', 'Connection failed'));
+  search.retry();
+  assert.equal(requests[1].query, '(drone AND (package OR delivery))');
+  assert.equal(requests[1].limit, 100);
+});
+
+test('does not shorten a rate-limit deadline beyond the native timer maximum', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { search, requests } = setup(t);
+  const interval = 2_147_483_647;
+  search.submit('drone');
+  requests[0].response.error(new CoreSearchError('rate-limit', 'Wait', true, 1000 + interval + 1000));
+  t.mock.timers.tick(interval);
+  assert.equal(search.canSearch(), false);
+  t.mock.timers.tick(1000);
+  assert.equal(search.canSearch(), true);
 });

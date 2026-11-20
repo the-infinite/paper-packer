@@ -2,12 +2,13 @@ import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core'
 import { Subscription } from 'rxjs';
 import { CoreApi, CoreSearchError, searchError } from './core-api.js';
 import { PaperResults } from './paper.js';
+import { DEFAULT_RESULT_LIMIT, SearchRequest, validateSearchInput } from './search-query.js';
 
 export type PaperSearchState =
   | { readonly status: 'idle' }
-  | { readonly status: 'loading'; readonly query: string }
-  | { readonly status: 'success'; readonly query: string; readonly results: PaperResults }
-  | { readonly status: 'error'; readonly query: string; readonly error: CoreSearchError };
+  | ({ readonly status: 'loading' } & SearchRequest)
+  | ({ readonly status: 'success'; readonly results: PaperResults } & SearchRequest)
+  | ({ readonly status: 'error'; readonly error: CoreSearchError } & SearchRequest);
 
 @Injectable()
 export class PaperSearch {
@@ -20,7 +21,8 @@ export class PaperSearch {
 
   readonly state = this.currentState.asReadonly();
   readonly inputError = signal('');
-  readonly canSearch = computed(() => this.state().status !== 'loading' && this.retryReady());
+  readonly limitError = signal('');
+  readonly canSearch = computed(() => this.retryReady());
   readonly canRetry = computed(() => {
     const state = this.state();
     return state.status === 'error' && state.error.retryable && this.canSearch();
@@ -46,32 +48,39 @@ export class PaperSearch {
     });
   }
 
-  submit(rawQuery: string): void {
-    if (!this.canSearch()) return;
-    const query = rawQuery.trim();
-    if (!query) {
-      this.inputError.set('Enter a topic to search for.');
-      return;
-    }
-    this.inputError.set('');
+  submit(rawQuery: string, rawLimit: unknown = DEFAULT_RESULT_LIMIT): boolean {
+    if (!this.canSearch()) return false;
+    const checked = validateSearchInput(rawQuery, rawLimit);
+    this.inputError.set(checked.queryError);
+    this.limitError.set(checked.limitError);
+    if (!checked.request) return false;
+    const { query, limit } = checked.request;
+    const active = this.state();
+    if (active.status === 'loading' && active.query === query && active.limit === limit) return false;
     this.request?.unsubscribe();
-    this.currentState.set({ status: 'loading', query });
-    this.request = this.api.search(query).subscribe({
-      next: (results) => this.currentState.set({ status: 'success', query, results }),
+    this.currentState.set({ status: 'loading', query, limit });
+    this.request = this.api.search(query, limit).subscribe({
+      next: (results) => this.currentState.set({ status: 'success', query, limit, results }),
       error: (cause: unknown) => {
         const error = searchError(cause);
-        this.currentState.set({ status: 'error', query, error });
-        if (error.retryAt !== null && error.retryAt > Date.now()) {
-          this.retryReady.set(false);
-          this.retryTimer = setTimeout(() => this.retryReady.set(true),
-            Math.min(error.retryAt - Date.now(), 2_147_483_647));
-        }
+        this.currentState.set({ status: 'error', query, limit, error });
+        if (error.retryAt !== null) this.pauseUntil(error.retryAt);
       },
     });
+    return true;
   }
 
-  retry(): void {
+  retry(): boolean {
     const state = this.state();
-    if (state.status === 'error' && this.canRetry()) this.submit(state.query);
+    return state.status === 'error' && this.canRetry() ? this.submit(state.query, state.limit) : false;
+  }
+
+  private pauseUntil(deadline: number): void {
+    clearTimeout(this.retryTimer);
+    const remaining = deadline - Date.now();
+    this.retryReady.set(remaining <= 0);
+    if (remaining > 0) {
+      this.retryTimer = setTimeout(() => this.pauseUntil(deadline), Math.min(remaining, 2_147_483_647));
+    }
   }
 }
