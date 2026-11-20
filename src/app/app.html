@@ -1,3 +1,4 @@
+@let state = search.state();
 <a class="skip-link" href="#main-content">Skip to content</a>
 
 <header class="site-header">
@@ -28,28 +29,87 @@
     <div class="section-heading">
       <div>
         <p class="eyebrow">Your research workspace</p>
-        <h2 id="workspace-title">Every discovery starts somewhere.</h2>
+        <h2 id="workspace-title">Find a new perspective.</h2>
       </div>
-      <span class="stage-label">Foundation preview</span>
+      <span class="stage-label">Research from CORE</span>
     </div>
-    <div class="workspace-body">
-      <div class="empty-illustration" aria-hidden="true">
-        <svg viewBox="0 0 180 140" focusable="false">
-          <circle cx="90" cy="70" r="60" fill="#edf5f3" />
-          <rect x="46" y="25" width="71" height="91" rx="7" fill="#dcebe7" transform="rotate(-12 81 70)" />
-          <rect x="61" y="19" width="71" height="95" rx="7" fill="white" stroke="#75978e" stroke-width="2" />
-          <path d="M76 39h39M76 51h39M76 63h26M76 87h20M76 97h29" stroke="#b0c9c2" stroke-width="3" stroke-linecap="round" />
-          <circle cx="123" cy="86" r="20" fill="#e2f3ec" stroke="#0d5149" stroke-width="3" />
-          <path d="m137 101 16 17" stroke="#0d5149" stroke-width="5" stroke-linecap="round" />
-        </svg>
+    <form class="search-form" role="search" aria-label="Search research papers" (submit)="submit($event, queryInput.value)">
+      <label for="paper-query">What would you like to explore?</label>
+      <div class="search-controls">
+        <input #queryInput id="paper-query" name="query" type="search" required maxlength="500"
+          placeholder="Try drone delivery or renewable energy"
+          [attr.aria-describedby]="search.inputError() ? 'query-help query-error' : 'query-help'"
+          [attr.aria-invalid]="search.inputError() ? 'true' : null">
+        <button type="submit" [disabled]="!search.canSearch()">{{ state.status === 'loading' ? 'Searching…' : 'Find papers' }}</button>
       </div>
-      <h3>A home for your next discovery</h3>
-      <p>This is the first look at Paper Packer. Paper search and live research results are coming in the next milestone.</p>
-      <a class="guide-link" href="#search-guide">Get familiar with Boolean search</a>
-    </div>
-    <div class="workspace-note">
-      <span class="note-icon" aria-hidden="true">i</span>
-      <p>No papers have been loaded. This preview does not connect to CORE yet.</p>
+      <p id="query-help" class="query-help">Search CORE with keywords. Each search returns up to {{ resultLimit }} papers.</p>
+      @if (search.inputError()) {
+        <p id="query-error" class="input-error" role="alert">{{ search.inputError() }}</p>
+      }
+    </form>
+    <p class="search-feedback" role="status" aria-live="polite" aria-atomic="true">{{ search.announcement() }}</p>
+
+    <div class="results-region" [attr.aria-busy]="state.status === 'loading'">
+    @switch (state.status) {
+      @case ('idle') {
+        <div class="workspace-body">
+          <div class="empty-illustration" aria-hidden="true">
+            <svg viewBox="0 0 180 140" focusable="false">
+              <circle cx="90" cy="70" r="60" fill="#edf5f3" />
+              <rect x="46" y="25" width="71" height="91" rx="7" fill="#dcebe7" transform="rotate(-12 81 70)" />
+              <rect x="61" y="19" width="71" height="95" rx="7" fill="white" stroke="#75978e" stroke-width="2" />
+              <path d="M76 39h39M76 51h39M76 63h26M76 87h20M76 97h29" stroke="#b0c9c2" stroke-width="3" stroke-linecap="round" />
+              <circle cx="123" cy="86" r="20" fill="#e2f3ec" stroke="#0d5149" stroke-width="3" />
+              <path d="m137 101 16 17" stroke="#0d5149" stroke-width="5" stroke-linecap="round" />
+            </svg>
+          </div>
+          <h3>Your next discovery starts here</h3>
+          <p>Enter a topic above to explore research papers, read their abstracts, and follow links to the original sources.</p>
+          <a class="guide-link" href="#search-guide">Get familiar with Boolean search</a>
+        </div>
+      }
+      @case ('loading') {
+        <div class="workspace-body loading-state">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <h3>Following your question</h3>
+          <p>Looking through CORE’s research collection. This can take a few moments.</p>
+        </div>
+      }
+      @case ('error') {
+        <div class="workspace-body error-state" role="alert">
+          <h3>We could not finish that search</h3>
+          <p>{{ state.error.message }}</p>
+          @if (state.error.retryAt; as retryAt) {
+            @if (!search.canSearch()) {
+              <p class="retry-note">Searching is paused until {{ retryAt | date:'shortTime' }}.</p>
+            }
+          }
+          @if (state.error.retryable) {
+            <button type="button" class="retry-button" [disabled]="!search.canRetry()" (click)="search.retry()">Try again</button>
+          }
+          <a class="guide-link" href="#search-guide">Review the search guide</a>
+        </div>
+      }
+      @case ('success') {
+        @if (state.results.papers.length) {
+          <div class="results-heading">
+            <h3>Results for <span class="submitted-query">“{{ state.query }}”</span></h3>
+            <p>{{ state.results.papers.length }} {{ state.results.papers.length === 1 ? 'paper' : 'papers' }} returned@if (state.results.totalHits !== null) { · {{ state.results.totalHits | number }} matching papers}</p>
+          </div>
+          <div class="paper-list">
+            @for (paper of state.results.papers; track $index) {
+              <app-paper-card [paper]="paper" />
+            }
+          </div>
+        } @else {
+          <div class="workspace-body">
+            <h3>No papers returned</h3>
+            <p>CORE did not return papers for “{{ state.query }}”. Try broader keywords or a different topic.</p>
+            <a class="guide-link" href="#search-guide">Explore the search guide</a>
+          </div>
+        }
+      }
+    }
     </div>
   </section>
 

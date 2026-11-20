@@ -1,0 +1,35 @@
+@let item = paper();
+<article>
+  <div class="paper-meta">
+    @if (item.year) {
+      <span>Published {{ item.year }}</span>
+    } @else {
+      <span>Publication year unavailable</span>
+    }
+    @if (item.id) { <span class="core-id">CORE {{ item.id }}</span> }
+  </div>
+  <h3>{{ item.title }}</h3>
+  <p class="authors">{{ item.authors.length ? item.authors.join(', ') : 'Authors unavailable' }}</p>
+  @if (item.abstract; as abstract) {
+    <p class="abstract">{{ abstract.length > 320 ? abstract.slice(0, 320) + '…' : abstract }}</p>
+    @if (abstract.length > 320) {
+      <details>
+        <summary>Read full abstract</summary>
+        <p class="abstract full-abstract">{{ abstract }}</p>
+      </details>
+    }
+  } @else {
+    <p class="missing-abstract">No abstract is available for this paper.</p>
+  }
+  <div class="paper-links">
+    @if (item.recordUrl; as recordUrl) {
+      <a [href]="recordUrl" target="_blank" rel="noopener noreferrer">View CORE record<span class="sr-only"> for {{ item.title }} (opens in a new tab)</span></a>
+    }
+    @if (item.fullTextUrl; as fullTextUrl) {
+      <a [href]="fullTextUrl" target="_blank" rel="noopener noreferrer">Full-text link<span class="sr-only"> for {{ item.title }} (opens in a new tab)</span></a>
+    }
+    @if (!item.recordUrl && !item.fullTextUrl) {
+      <span>No source link available</span>
+    }
+  </div>
+</article>
