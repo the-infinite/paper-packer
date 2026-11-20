@@ -11,8 +11,3 @@ npm-debug.log*
 
 # Documentation stays local and must not be committed.
 docs/
-*.md
-*.mdx
-*.rst
-*.adoc
-*.pdf
